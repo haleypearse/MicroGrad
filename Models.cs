@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace MicroGrad
@@ -9,6 +10,7 @@ namespace MicroGrad
         public static int ValueCount { get; set; } = 1;
     }
 
+    [DebuggerDisplay("{Index, nq}: {Data, nq}")]
     public class Value
     {
         public Value(double data)

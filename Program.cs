@@ -62,14 +62,18 @@ namespace MicroGrad
                 else
                     iNode = nodes[node];
 
-                var opNode = chart.TextNode(node.Op.ToString(), Shape.Circle);
-                chart.Link(opNode, nodes[node], Link.Arrow, "");
-                foreach (var child in node.Children)
+                if (node.Children.Any())
                 {
-                    Build(child);
-                    chart.Link(nodes[child], opNode, Link.Arrow, "");
+
+                    var opNode = chart.TextNode(node.Op.ToString(), Shape.Circle);
+                    chart.Link(opNode, nodes[node], Link.Arrow, "");
+                    foreach (var child in node.Children)
+                    {
+                        Build(child);
+                        chart.Link(nodes[child], opNode, Link.Arrow, "");
 
 
+                    }
                 }
             }
 
