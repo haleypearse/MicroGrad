@@ -56,7 +56,7 @@ namespace MicroGrad
                 INode iNode;
                 if (!nodes.ContainsKey(node))
                 {
-                    iNode = chart.TextNode($"{node.Index}: {node.Data.ToString()}", Shape.RoundEdges);
+                    iNode = chart.TextNode($"{node.ID}: {node.Data.ToString()}", Shape.RoundEdges);
                     nodes.Add(node, iNode);
                 }
                 else
