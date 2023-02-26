@@ -40,8 +40,13 @@ namespace MicroGrad
             var e = c + d;
 
 
-            CreateDiagram(e);
+            var mlp = new MLP(27, new[] { 8, 7, 1 });
 
+            var test = mlp.Forward(new double[] { 2 });
+
+            var props = test.GetType().GetProperties();
+            ;
+            CreateDiagram(e);
 
         }
 
@@ -56,7 +61,7 @@ namespace MicroGrad
                 INode iNode;
                 if (!nodes.ContainsKey(node))
                 {
-                    iNode = chart.TextNode($"{node.ID}: {node.Data.ToString()}", Shape.RoundEdges);
+                    iNode = chart.TextNode($"{node.Id}: {node.Data.ToString()}", Shape.RoundEdges);
                     nodes.Add(node, iNode);
                 }
                 else
@@ -82,6 +87,8 @@ namespace MicroGrad
             var e = new List<INode>();
 
             string mermaidSyntax = chart.Render();// Regex.Unescape(chart.Render());
+
+
             ; 
 
             //var outputHtml = new HtmlDocument();
