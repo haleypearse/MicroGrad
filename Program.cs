@@ -40,7 +40,7 @@ namespace MicroGrad
             var e = c + d;
 
 
-            var mlp = new MLP(27, new[] { 8, 7, 1 });
+            var mlp = new MLP(new[] { 27, 12, 2 });
 
             var test = mlp.Forward(new double[] { 2 });
 
@@ -50,7 +50,7 @@ namespace MicroGrad
 
         }
 
-        private static void CreateDiagram(Value root)
+        private static string CreateDiagram(Value root)
         {
             var nodes = new Dictionary<Value, INode>(); // new List<INode>();
             var chart = FlowChart.Create(Orientation.LeftToRight);
@@ -83,11 +83,9 @@ namespace MicroGrad
             }
 
 
-
-            var e = new List<INode>();
-
             string mermaidSyntax = chart.Render();// Regex.Unescape(chart.Render());
-
+            return mermaidSyntax;
+            var e = new List<INode>();
 
             ; 
 

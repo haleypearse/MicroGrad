@@ -2,12 +2,17 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using FluentMermaid;
+using FluentMermaid.Enums;
+using FluentMermaid.Flowchart;
+using FluentMermaid.Flowchart.Enum;
 
 namespace MicroGrad
 {
     public static class Global
     {
         public static int ValueId { get; set; } = 1;
+        public static string Context { get; set; }
         public static Random Rand { get; set; } = new Random(1234);
     }
 
@@ -19,9 +24,9 @@ namespace MicroGrad
 
     public class Neuron : Module
     {
-        public Neuron(int nin, string nonlin = null)
+        public Neuron(IEnumerable<Value> X, string nonlin = null)
         {
-            Initialize(nin);
+            Initialize(X);
             switch (nonlin)
             {
                 case "relu":
@@ -29,10 +34,12 @@ namespace MicroGrad
             }
         }
 
-        public void Initialize(int nin)
+        public void Initialize(IEnumerable<Value> X)
         {
-            W = Enumerable.Range(1, nin).Select(i => new Value(Global.Rand.NextDouble() * 2 - 1)).ToArray();
-            B = new Value(Global.Rand.NextDouble() * 2 - 1);
+
+            W = Enumerable.Range(1, X.Count()).Select(i => new Value()).ToArray();
+            B = new Value();
+            Values = X.Zip(W).Select(tup => tup.First * tup.Second).ToList();
         }
 
         public double Forward(double[] X)
@@ -46,8 +53,22 @@ namespace MicroGrad
         }
 
         public IEnumerable<Value> Parameters { get => W.Append(B); }
+        public List<Value> Values { get; set; } = new List<Value>();
         public Value[] W { get; set; }
+        public Value[] X { get; set; }
         public Value B { get; set; }
+        public Value Output {
+            get
+            {
+                //Value[] weighted = ;
+                //foreach (var tup in X.Zip(W))
+                //{
+                //    sum += tup.First * tup.Second;
+                //}
+                Global.Context = "Aggregate";
+                return Values.Aggregate((x,y)=>x+y);
+            }
+        }
         //public delegate Value Calculate(double[] X)
         //public Calculate Forward { get; set; }
         //return X.Zip(W).Select(tup => tup.First * tup.Second + B).Sum();
@@ -63,12 +84,14 @@ namespace MicroGrad
         public List<Neuron> Neurons { get; set; } = new List<Neuron>();
         public IEnumerable<Value> Parameters { get => Neurons.SelectMany(n=>n.Parameters); }
 
-        public Layer(int nin, int nout)
+        public Layer(int nin, int nout, Layer lastLayer)
         {
             for (int i = 0; i < nout; i++)
             {
+                var X = lastLayer?.Neurons.Select(n => n.Output)
+                    ?? Enumerable.Range(1, 1).Select(i => new Value());
 
-                Neurons.Add(new Neuron(nin)
+                Neurons.Add(new Neuron(X)
                 {
 
                 });
@@ -86,13 +109,10 @@ namespace MicroGrad
     }
     public class MLP : Module
     {
-        public MLP(int nin, int[] nouts)
+        public MLP(int[] layerSizes)
         {
-            var sizes = nouts.Prepend(nin).ToArray();
-            for (int i = 0; i < nouts.Length; i++)
-            {
-                Layers.Add(new Layer(sizes[i], sizes[i + 1]));
-            }
+            for (int i = 0; i < layerSizes.Length - 1; i++)
+                Layers.Add(new Layer(layerSizes[i], layerSizes[i + 1], Layers.LastOrDefault()));
                 
         }
         public double Forward(double[] X)
@@ -119,9 +139,10 @@ namespace MicroGrad
     [DebuggerDisplay("{Id, nq}: {Data, nq}")]
     public class Value
     {
-        public Value(double data)
+        public Value(double? data = null, string context = null)
         {
-            Data = data;
+            context = context ?? Global.Context;
+            Data = data ?? Global.Rand.NextDouble() * 2 - 1;
         }
 
         public double Data { get; set; }
@@ -146,6 +167,7 @@ namespace MicroGrad
 
         public bool IsLeaf { get => !Children.Any(); }
         public double Grad { get; set; }
+        public string Context { get; set; }
         public int Id { get; set; } = Global.ValueId++;
         public List<Value> Children { get; set; } = new List<Value>();
         //public List<Value> Prev { get => Children.Distinct().ToList(); }
@@ -173,7 +195,50 @@ namespace MicroGrad
         {
 
         }
+
+
+        public string Diagram
+        {
+            get
+            {
+                var nodes = new Dictionary<Value, INode>(); // new List<INode>();
+                var chart = FlowChart.Create(Orientation.LeftToRight);
+
+                Build(this);
+                void Build(Value node)
+                {
+                    INode iNode;
+                    if (!nodes.ContainsKey(node))
+                    {
+                        iNode = chart.TextNode($"{node.Id}: {node.Data.ToString()}", Shape.RoundEdges);
+                        nodes.Add(node, iNode);
+                    }
+                    else
+                        iNode = nodes[node];
+
+                    if (node.Children.Any())
+                    {
+
+                        var opNode = chart.TextNode(node.Op.ToString(), Shape.Circle);
+                        chart.Link(opNode, nodes[node], Link.Arrow, "");
+                        foreach (var child in node.Children)
+                        {
+                            Build(child);
+                            chart.Link(nodes[child], opNode, Link.Arrow, "");
+
+
+                        }
+                    }
+                }
+
+
+                string mermaidSyntax = chart.Render();// Regex.Unescape(chart.Render());
+                return mermaidSyntax;
+
+            }
+        }
     }
+
 
 
     // Operator Overloading Example
