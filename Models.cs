@@ -146,6 +146,7 @@ namespace MicroGrad
         }
 
         public double Data { get; set; }
+        public string DataDisplay { get => Data.ToString().Substring(0, 5); }
         //public delegate double Forward()
         //public delegate double Calculate(double[] X = null);
         //public Calculate Calc { get; set; } 
@@ -157,9 +158,9 @@ namespace MicroGrad
         {
             switch (Op)
             {
-                case Op.Add:
+                case "+":
                     Data = Children[0].Data + Children[1].Data; break;
-                case Op.Multiply:
+                case "x":
                     Data = Children[0].Data * Children[1].Data; break;
             }
             return Data;
@@ -171,7 +172,7 @@ namespace MicroGrad
         public int Id { get; set; } = Global.ValueId++;
         public List<Value> Children { get; set; } = new List<Value>();
         //public List<Value> Prev { get => Children.Distinct().ToList(); }
-        public Op Op { get; set; }    
+        public string Op { get; set; }    
 
 
         public static Value operator +(Value a, Value b)
@@ -179,7 +180,7 @@ namespace MicroGrad
             return new Value(a.Data + b.Data)
             {
                 Children = new[] { a, b }.ToList(),
-                Op = Op.Add,
+                Op = "+",
             };
         }
         public static Value operator *(Value a, Value b)
@@ -187,7 +188,7 @@ namespace MicroGrad
             return new Value(a.Data * b.Data)
             {
                 Children = new[] { a, b }.ToList(),
-                Op = Op.Multiply,
+                Op = "x",
             };
         }
 
@@ -210,7 +211,7 @@ namespace MicroGrad
                     INode iNode;
                     if (!nodes.ContainsKey(node))
                     {
-                        iNode = chart.TextNode($"{node.Id}: {node.Data.ToString()}", Shape.RoundEdges);
+                        iNode = chart.TextNode($"{node.Id}: {node.DataDisplay}", Shape.RoundEdges);
                         nodes.Add(node, iNode);
                     }
                     else
