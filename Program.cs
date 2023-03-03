@@ -26,29 +26,11 @@ namespace MicroGrad
     {
         public static void Main(string[] args)
         {
-            NNFun();
+            //NNFun();
 
             CreateHostBuilder(args).Build().Run();
         }
 
-        private static void NNFun()
-        {
-            var a = 3.0.Value();
-            var b = 4.0.Value();
-            var c = a * b;
-            var d = 5.0.Value();
-            var e = c + d;
-
-
-            var mlp = new MLP(new[] { 27, 12, 2 });
-
-            var test = mlp.Forward(new double[] { 2 });
-
-            var props = test.GetType().GetProperties();
-            ;
-            CreateDiagram(e);
-
-        }
 
         private static string CreateDiagram(Value root)
         {
@@ -70,7 +52,7 @@ namespace MicroGrad
                 if (node.Children.Any())
                 {
 
-                    var opNode = chart.TextNode(node.Op.ToString(), Shape.Circle);
+                    var opNode = chart.TextNode(((char)node.Op.Char).ToString(), Shape.Circle);
                     chart.Link(opNode, nodes[node], Link.Arrow, "");
                     foreach (var child in node.Children)
                     {
