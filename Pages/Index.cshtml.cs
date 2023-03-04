@@ -35,7 +35,7 @@ namespace MicroGrad.Pages
             //var e = c + d;
 
 
-            var mlp = new MLP(new[] { 2, 2, 1 });
+            var mlp = new MLP(new[] { 3, 3, 2 });
             var last = mlp.Layers.Last().Neurons.Last().Output;
             DiagramContent = last.Diagram;
 

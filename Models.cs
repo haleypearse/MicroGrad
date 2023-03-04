@@ -13,6 +13,7 @@ namespace MicroGrad
     public static class Global
     {
         public static int ValueId { get; set; } = 1;
+        public static int NeuronId { get; set; } = 1;
         public static string Context { get; set; }
         public static Random Rand { get; set; } = new Random(1234);
 
@@ -34,6 +35,7 @@ namespace MicroGrad
     {
         public Neuron(IEnumerable<Value> X, string nonlin = null)
         {
+            Id = Global.NeuronId++;
             Initialize(X);
             switch (nonlin)
             {
@@ -52,7 +54,7 @@ namespace MicroGrad
 
         }
 
-        public double Forward(double[] X)
+        public double Forward(double[] X)   
         {
             double sum = 0;
             foreach(var tup in X.Zip(W))
@@ -61,7 +63,8 @@ namespace MicroGrad
             }
             return Nonlin(sum.Value()).Data;
         }
-         
+
+        public int Id { get; set; }
         public IEnumerable<Value> Parameters { get => W.Append(B); }
         public List<Value> Values { get; set; } = new List<Value>();
         public Value[] W { get; set; }
@@ -180,9 +183,6 @@ namespace MicroGrad
         public Neuron Neuron { get; set; }
         public double Data { get; set; }
         public string DataDisplay { get => Data.ToString().Substring(0, 6); }
-        //public delegate double Forward()
-        //public delegate double Calculate(double[] X = null);
-        //public Calculate Calc { get; set; } 
 
         /// <summary>
         /// Stores and returns the calculation result
@@ -236,87 +236,76 @@ namespace MicroGrad
         {
             get
             {
-                var opId = Global.ValueId;
-                var ret = "flowchart LR\n";
+                var opCount = Global.ValueId;
+                var fc = "flowchart LR\n";
                 var classDefs = "";
-                ret += "classDef Neuron fill:#FFFACD\n";
-                ret += "classDef Add fill:#DC143C\n";
-                ret += "classDef Multiply fill:#6495ED\n";
-
+                int neuronSubgraph = 0;
+                fc += "classDef Node fill:#FFFACD\n";
+                fc += "classDef Add fill:#DC143C\n";
+                fc += "classDef Multiply fill:#6495ED\n";
 
                 //var nodes = new Dictionary<Value, INode>(); // new List<INode>();
                 var nodes = new List<int>(); // new List<INode>();
 
                 Build(this);
-                void Build(Value node)
+                void Build(Value v)
                 {
-                    //INode iNode;
-                    if (!nodes.Contains(node.Id))
+                    var opId = opCount++;
+
+                    if (v.Neuron != null)
+                        if (v.Neuron.Id != neuronSubgraph)
+                        {
+                            if (neuronSubgraph > 0)
+                                fc += $"end\n";
+
+                            neuronSubgraph = v.Neuron.Id;
+                            fc += $"subgraph Neuron_{neuronSubgraph}\n";
+                        }
+                        else;
+                    else;
+
+                    // Add the node to graph
+                    if (!nodes.Contains(v.Id))
                     {
-                        ret += $"Neuron_{node.Id}[{node.Comment}: {node.DataDisplay}]\n";
-                        classDefs += $"class Neuron_{node.Id} Neuron\n";
+                        fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}]\n";
+                        classDefs += $"class Node_{v.Id} Node\n";
                     }
                     else
                         ; //iNode = nodes[node];
 
-                    if (node.Children.Any())
+                    if (v.Children.Any())
                     {
-                        ret += $"Op_{++opId}(({(char)node.Op.Char}))\n";
-                        classDefs += $"class Op_{opId} {node.Op.Char}\n";
-                        ret += $"Op_{opId} --> Neuron_{node.Id}\n";
+                        // Add a node showing the operation that calculated the parent node's value
+                        fc += $"Op_{opId}(({(char)v.Op.Char}))\n";
 
-                        foreach (var child in node.Children)
+                        // Declare the op node's class
+                        classDefs += $"class Op_{opId} {v.Op.Char}\n";
+
+                        // Link the op node with the parent node
+                        fc += $"Op_{opId} --> Node_{v.Id}\n";
+
+                        foreach (var child in v.Children)
                         {
-                            ret += $"Neuron_{child.Id} --> Op_{opId}\n";
+                            fc += $"Node_{child.Id} --> Op_{opId}\n";
                             Build(child);
                         }
                     }
+                    else;
                 }
 
-                return ret + classDefs;
+                if (neuronSubgraph > 0)
+                    fc += $"end\n";
+
+                return fc + classDefs;
             }
         }
     }
 
-
-
-    // Operator Overloading Example
-    public readonly struct Fraction
+    public class MermaidFlowchart
     {
-        private readonly int num;
-        private readonly int den;
-
-        public Fraction(int numerator, int denominator)
+        public class Node
         {
-            if (denominator == 0)
-            {
-                throw new ArgumentException("Denominator cannot be zero.", nameof(denominator));
-            }
-            num = numerator;
-            den = denominator;
+
         }
-
-        public static Fraction operator +(Fraction a) => a;
-        public static Fraction operator -(Fraction a) => new Fraction(-a.num, a.den);
-
-        public static Fraction operator +(Fraction a, Fraction b)
-            => new Fraction(a.num * b.den + b.num * a.den, a.den * b.den);
-
-        public static Fraction operator -(Fraction a, Fraction b)
-            => a + (-b);
-
-        public static Fraction operator *(Fraction a, Fraction b)
-            => new Fraction(a.num * b.num, a.den * b.den);
-
-        public static Fraction operator /(Fraction a, Fraction b)
-        {
-            if (b.num == 0)
-            {
-                throw new DivideByZeroException();
-            }
-            return new Fraction(a.num * b.den, a.den * b.num);
-        }
-
-        public override string ToString() => $"{num} / {den}";
     }
 }
