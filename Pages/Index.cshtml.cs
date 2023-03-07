@@ -10,44 +10,40 @@ namespace MicroGrad.Pages
 {
     public class IndexModel : PageModel
     {
-        public string DiagramContent { get; set; }
         private readonly ILogger<IndexModel> _logger;
+        public string DiagramContent { get; set; }
+        public string Diagram { get; set; }
+        public int[] NNParams { get; private set; } = new[] { 2, 3, 1 };
 
         public IndexModel(ILogger<IndexModel> logger)
         {
             _logger = logger;
+            Global.Initialize();
         }
 
-        public string Diagram { get; set; }
 
         public void OnGet()
         {
             NNFun();
         }
+        
+        public void OnPost()
+        {
+            Global.Initialize();
+            var content = Request.Form["LayerSizes"];
+            NNParams = content.ToString().Split(',').Select(s => int.Parse(s)).ToArray();
+
+            NNFun();
+        }
+
+
 
 
         public void NNFun()
         {
-            //var a = 3.0.Value();
-            //var b = 4.0.Value();
-            //var c = a * b;
-            //var d = 5.0.Value();
-            //var e = c + d;
 
+            DiagramContent = new MLP(NNParams).Diagram;
 
-            var mlp = new MLP(new[] { 3, 3, 2 });
-            var last = mlp.Layers.Last().Neurons.Last().Output;
-            DiagramContent = last.Diagram;
-
-            //string myname = Request.Form["first_name_txt"];
-
-            //var flowchartNode = 
-
-            //var test = mlp.Forward(new double[] { 2 });
-
-            //var props = test.GetType().GetProperties();
-            ;
-            //CreateDiagram(e);
         }
     }
 }

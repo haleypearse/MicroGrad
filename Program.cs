@@ -49,12 +49,12 @@ namespace MicroGrad
                 else
                     iNode = nodes[node];
 
-                if (node.Children.Any())
+                if (node.Parents.Any())
                 {
 
                     var opNode = chart.TextNode(((char)node.Op.Char).ToString(), Shape.Circle);
                     chart.Link(opNode, nodes[node], Link.Arrow, "");
-                    foreach (var child in node.Children)
+                    foreach (var child in node.Parents)
                     {
                         Build(child);
                         chart.Link(nodes[child], opNode, Link.Arrow, "");

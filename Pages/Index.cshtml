@@ -4,6 +4,16 @@
     ViewData["Title"] = "Home page";
 }
 
+<form method="post">
+    <fieldset>
+        <legend>Network Parameters</legend>
+        <div>
+            <label for="LayerSizes">Layer Sizes:</label>
+            <input type="text" name="LayerSizes" value="@(string.Join(",", Model.NNParams.Select(p=>p.ToString())))" />
+        </div>
+    </fieldset>
+</form>
+
 <pre class="mermaid">@Model.DiagramContent</pre>
 <div style="white-space: pre-line">@Model.DiagramContent</div>
 
