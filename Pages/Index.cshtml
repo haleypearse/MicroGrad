@@ -4,12 +4,14 @@
     ViewData["Title"] = "Home page";
 }
 
+
 <form method="post">
+    @*<select asp-for="selectedFilter" asp-items="Model.Options" onchange="this.form.submit();"></select>*@
     <fieldset>
         <legend>Network Parameters</legend>
         <div>
             <label for="LayerSizes">Layer Sizes:</label>
-            <input type="text" name="LayerSizes" value="@(string.Join(",", Model.NNParams.Select(p=>p.ToString())))" />
+            <input type="text" name="LayerSizes" value="@((Model.InvalidParams ?? string.Join(",", Model.NNParams.Select(p=>p.ToString()))))" />
         </div>
     </fieldset>
 </form>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using FluentMermaid;
 using FluentMermaid.Enums;
 using FluentMermaid.Flowchart;
@@ -17,18 +18,18 @@ namespace MicroGrad
         public static string Context { get; set; }
         public static Random Rand { get; set; } = new Random(1234);
         public static List<Value> Values { get; internal set; } = new List<Value>();
+        public static string FlowchartClassDefinitions;
+        public static string FlowchartDefinition =
+            "flowchart LR\n" +
+            "classDef Node fill:#FFFACD\n" +
+            "classDef Neuron fill:#8B4513\n" +
+            "classDef Add fill:#DC143C\n" +
+            "classDef Multiply fill:#6495ED\n\n";
 
         public static void Initialize()
         {
             ValueId = NeuronId = 1;
         }
-
-        public static string FlowchartDefinition =
-            "flowchart LR\n" +
-            "classDef Node fill:#FFFACD\n" +
-            "classDef Neuron fill:#B0C4DE\n" +
-            "classDef Add fill:#DC143C\n" +
-            "classDef Multiply fill:#6495ED\n\n";
     }
 
     public class Context
@@ -58,12 +59,9 @@ namespace MicroGrad
 
         public void Initialize(IEnumerable<Value> X)
         {
-           
             W = Enumerable.Range(1, X.Count()).Select(i => new Value(null, "W", this)).ToArray();
             B = new Value(null, "B", this);
-            //Global.Context = "Summation";
             Output = X.Zip(W).Select(tup => tup.First * tup.Second).Aggregate((x, y) => x + y);
-
         }
 
         public double Forward(double[] X)   
@@ -84,23 +82,9 @@ namespace MicroGrad
         public Value B { get; set; }
         public Value Output { get; set; }
         public Layer Layer { get; set; }
-        //    get
-        //    {
-        //        //Global.Context = "Agg";
-        //        var ret = Values.Aggregate((x, y) => x + y);
-        //        Global.Context = null;
-        //        return ret;
-        //    }
-        //}
-        //public delegate Value Calculate(double[] X)
-        //public Calculate Forward { get; set; }
-        //return X.Zip(W).Select(tup => tup.First * tup.Second + B).Sum();
-        //public bool Nonlin { get; set; }
         public delegate Value Nonlinearity(Value input);
         public Nonlinearity Nonlin {get;set;} = (Value input) => input * new Value(1);
-
     }
-
 
     public class Layer : Module
     {
@@ -111,15 +95,13 @@ namespace MicroGrad
 
         public Layer(int nin, int nout, Layer lastLayer)
         {
+            // Set the layer's inputs to outputs of prev layer or create new values
+            var X = lastLayer?.Neurons.Select(n => n.Output)
+                ?? Enumerable.Range(1, nin).Select(i => new Value(null, "Input"));
+
             for (int i = 0; i < nout; i++)
             {
-                var X = lastLayer?.Neurons.Select(n => n.Output)
-                    ?? Enumerable.Range(1, 1).Select(i => new Value(null,"Input"));
-                ;
-                Neurons.Add(new Neuron(X)
-                {
-                    Layer = this,
-                });
+                Neurons.Add(new Neuron(X) { Layer = this, });
             }
         }
         public double Forward(double[] X)
@@ -129,8 +111,8 @@ namespace MicroGrad
                 ret = neuron.Forward(X);
             return ret;
         }
-
     }
+
     public class MLP : Module
     {
         public MLP(int[] layerSizes)
@@ -147,7 +129,7 @@ namespace MicroGrad
         }
         public IEnumerable<Value> Parameters { get => Layers.SelectMany(n=>n.Parameters); }
         public List<Layer> Layers { get; set; } = new List<Layer>();
-        public string Diagram { get => Global.FlowchartDefinition + string.Join("\n", Layers.Last().Neurons.Select(n => n.Output.Diagram)); }
+        public string Diagram { get => Global.FlowchartDefinition + string.Join("\n", Layers.Last().Neurons.Select(n => n.Output.Diagram)) + "\n\n" + Global.FlowchartClassDefinitions; }
     }
 
     public class Op
@@ -221,7 +203,6 @@ namespace MicroGrad
         //public List<Value> Prev { get => Parents.Distinct().ToList(); }
         public Op Op { get; set; } 
 
-
         public static Value operator +(Value a, Value b)
         {
             var ret = new Value(a.Data + b.Data)
@@ -234,6 +215,7 @@ namespace MicroGrad
             ret.Neuron = b.Neuron;
             return ret;
         }
+
         public static Value operator *(Value a, Value b)
         {
             var ret = new Value(a.Data * b.Data)
@@ -252,75 +234,71 @@ namespace MicroGrad
 
         }
 
-
         public string Diagram
         {
             get
             {
-                var opCount = Global.ValueId;
                 var fc = "";
-                var classDefs = "";
-
                 var addedNodes = new List<int>();
+                var depth = 0;
 
                 Build(this);
                 void Build(Value v)
                 {
-                    var opId = opCount++;
-                    string subgraph = v.Neuron?.Id.ToString();
-
-                    if (null != subgraph)
+                    depth++;
+                    string neuronId = v.Neuron?.Id.ToString();
+                    //string layer = v.Neuron.Layer.
+                    if (null != neuronId)
                     {
-                        //if (subgraph != null)
-                        //    fc += $"end\n\n";
-
-                        subgraph = v.Neuron.Id.ToString();
-                        fc += $"\nsubgraph Neuron_{subgraph}\n";
-                        classDefs += $"class Neuron_{subgraph} Neuron\n";
+                        fc += $"\nsubgraph Neuron_{neuronId} %%{depth}\n";
+                        Global.FlowchartClassDefinitions += $"class Neuron_{neuronId} Neuron\n";
                     }
-                    else;
 
                     // Add the node to graph
                     if (!addedNodes.Contains(v.Id))
                     {
-                        fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}]\n";
-                        classDefs += $"class Node_{v.Id} Node\n";
+                        fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}] %%{depth}\n";
+                        Global.FlowchartClassDefinitions += $"class Node_{v.Id} Node\n";
                     }
-                    else
-                        ; //iNode = nodes[node];
+
+                    // Op is identified by its connected nodes
+                    var opId = "Op_" + v.Parents.Select(p => p.Id.ToString()).Join("-") + "_" + v.Id.ToString();
 
                     if (v.Parents.Any())
                     {
                         // Add a node showing the operation that calculated the parent node's value
-                        fc += $"Op_{opId}(({(char)v.Op.Char}))\n";
+                        fc += $"{opId}(({(char)v.Op.Char})) %%{depth}\n";
 
                         // Declare the op node's class
-                        classDefs += $"class Op_{opId} {v.Op.Char}\n";
+                        Global.FlowchartClassDefinitions += $"class {opId} {v.Op.Char}\n";
+
+                        if (neuronId != null)
+                            fc += $"end\n\n";
+
+                        // Link the op node with each parent node
+                        if (fc.Contains($"{opId} --> Node_{v.Id}")) ;
+                        fc += $"{opId} --> Node_{v.Id} %%{depth}\n";
+
+
+                        foreach (var parent in v.Parents)
+                        {
+                            fc += $"Node_{parent.Id} --> {opId} %%{depth}\n";
+                            Build(parent);
+                        }
                     }
-
-
-                    if (subgraph != null)
-                       fc += $"end\n\n";
-
-                    if (v.Parents.Any())
-                    {
-
-                    }
+                    else if (neuronId != null)
+                        fc += $"end %%{depth}\n\n";
                     else;
-
-                    // Link the op node with each parent node
-                    fc += $"Op_{opId} --> Node_{v.Id}\n";
-
-                    foreach (var parent in v.Parents)
-                    {
-                        fc += $"Node_{parent.Id} --> Op_{opId}\n";
-                        Build(parent);
-                    }
+                    depth--;
                 }
 
+                void Add(Value v1, Value v2 = null)
+                {
+                    //fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}]\n";
 
+                }
 
-                return fc + "\n" + classDefs;
+                return fc;
             }
         }
     }

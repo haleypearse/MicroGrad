@@ -13,7 +13,8 @@ namespace MicroGrad.Pages
         private readonly ILogger<IndexModel> _logger;
         public string DiagramContent { get; set; }
         public string Diagram { get; set; }
-        public int[] NNParams { get; private set; } = new[] { 2, 3, 1 };
+        public int[] NNParams { get; private set; } = new[] { 1,3 };
+        public string InvalidParams { get; set; }
 
         public IndexModel(ILogger<IndexModel> logger)
         {
@@ -31,7 +32,14 @@ namespace MicroGrad.Pages
         {
             Global.Initialize();
             var content = Request.Form["LayerSizes"];
-            NNParams = content.ToString().Split(',').Select(s => int.Parse(s)).ToArray();
+            try
+            {
+                NNParams = content.ToString().Split(',').Select(s => int.Parse(s)).ToArray();
+            }
+            catch
+            {
+                InvalidParams = content;
+            }
 
             NNFun();
         }

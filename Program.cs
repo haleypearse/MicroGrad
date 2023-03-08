@@ -123,5 +123,7 @@ namespace MicroGrad
     public static class ExtensionMethods
     {
         public static Value Value(this double val) => new Value(val);
+        public static string Join(this string[] s, string separator = null) => string.Join(separator ?? "", s);
+        public static string Join(this IEnumerable<string> s, string separator = null) => string.Join(separator ?? "", s.ToArray());
     }
 }
