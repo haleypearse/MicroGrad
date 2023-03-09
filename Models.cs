@@ -4,10 +4,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Xml.Linq;
 using FluentMermaid;
 using FluentMermaid.Enums;
 using FluentMermaid.Flowchart;
 using FluentMermaid.Flowchart.Enum;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace MicroGrad
 {
@@ -234,68 +236,126 @@ namespace MicroGrad
 
         }
 
-        public string Diagram
+        public class Link
+        {
+            public Link(Value from, Value to)
+            {
+                From = from;
+                To = to;
+            }
+
+            public string Text { get => $"{From.Id} --> {To.Id}"; }
+            public Value From { get; set; }
+            public Value To { get; set; }
+
+        }
+        public class Node
+        {
+            public Node(string lineType, string nodeType, int depth, Value value = null, Value to = null)
+            {
+                NodeType = nodeType;
+                Depth = depth;
+                Value = value;
+
+            }
+
+            public string Text
+            {
+                get =>
+                        NodeType == "neuron" ? "" :
+                        NodeType == "Op" ? $"{OpText} %% {Depth}"
+                    : null ;
+
+                    //LineType == "link" ?
+
+                    //$"{NodeType}{Value.Id}[{Value.Comment}: {Value.DataDisplay}]".PadRight(40, ' ') + "%% {depth}\n" :
+                    //LineType == "link" ? $"{Value.Id} --> {To.Id}".PadRight(40, ' ') + "%% {depth}\n" :
+                    //null;
+
+            }
+            public int Depth { get; set; }
+            public Value Value { get; set; }
+            //public string LineType { get; set; } // node, link
+            public string NodeType { get; set; } // op, neuron
+            public string OpText { get => "Op_" + Value.Parents.Select(p => p.Id.ToString()).Join("-") + "_" + Value.Id.ToString(); }
+
+    }
+
+    public string Diagram
         {
             get
             {
-                var fc = "";
-                var addedNodes = new List<int>();
+                var nodes = new List<Node>();
+                var links = new List<Link>();
                 var depth = 0;
 
                 Build(this);
                 void Build(Value v)
                 {
                     depth++;
+                    foreach (var parent in v.Parents)
+                    {
+                        Build(parent);
+                        links.Add(new Link(parent, v)); // ($"Node_{parent.Id}", Op(v));
+                    }
+                    nodes.Add(new Node())
+
+                    if (nodes.Any(dl=>dl.Value == v))
+                        return;
+
                     string neuronId = v.Neuron?.Id.ToString();
                     //string layer = v.Neuron.Layer.
                     if (null != neuronId)
                     {
-                        fc += $"\nsubgraph Neuron_{neuronId} %%{depth}\n";
+                        //fc += $"\nsubgraph Neuron_{neuronId} %% {depth}\n";
                         Global.FlowchartClassDefinitions += $"class Neuron_{neuronId} Neuron\n";
                     }
 
                     // Add the node to graph
-                    if (!addedNodes.Contains(v.Id))
-                    {
-                        fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}] %%{depth}\n";
+                        //fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}] %% {depth}\n";
                         Global.FlowchartClassDefinitions += $"class Node_{v.Id} Node\n";
-                    }
-
-                    // Op is identified by its connected nodes
-                    var opId = "Op_" + v.Parents.Select(p => p.Id.ToString()).Join("-") + "_" + v.Id.ToString();
 
                     if (v.Parents.Any())
                     {
                         // Add a node showing the operation that calculated the parent node's value
-                        fc += $"{opId}(({(char)v.Op.Char})) %%{depth}\n";
+                        nodes.Add(new Node("node", "op", depth, v));
+                        //fc += $"{Op(v)}(({(char)v.Op.Char})) %% {depth}\n";
 
                         // Declare the op node's class
-                        Global.FlowchartClassDefinitions += $"class {opId} {v.Op.Char}\n";
+                        Global.FlowchartClassDefinitions += $"class {Op(v)} {v.Op.Char}\n";
 
-                        if (neuronId != null)
-                            fc += $"end\n\n";
+                        //if (neuronId != null)
+                        //    fc += $"end\n\n";
 
                         // Link the op node with each parent node
-                        if (fc.Contains($"{opId} --> Node_{v.Id}")) ;
-                        fc += $"{opId} --> Node_{v.Id} %%{depth}\n";
-
-
-                        foreach (var parent in v.Parents)
-                        {
-                            fc += $"Node_{parent.Id} --> {opId} %%{depth}\n";
-                            Build(parent);
-                        }
+                        Link(Op(v), $"Node_{v.Id}");
                     }
-                    else if (neuronId != null)
-                        fc += $"end %%{depth}\n\n";
+
+                    //else if (neuronId != null)
+                    //    fc += $"end %% {depth}\n\n";
                     else;
                     depth--;
                 }
 
-                void Add(Value v1, Value v2 = null)
-                {
-                    //fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}]\n";
+                //string Op(Value v) => "Op_" + v.Parents.Select(p => p.Id.ToString()).Join("-") + "_" + v.Id.ToString();
+                //void Add(Value v, string type)
+                //{
+                //    //lines.Add(new OrderedLine(type, ) { Depth = depth, Value = v });
+                //}
+                //void Link(string from, string to)
+                //{
+                //    fc += $"{from} --> {to}".PadRight(40, ' ') + "%% {depth}\n";
+                //}
 
+                foreach (var layer in nodes.GroupBy(l => l.Value.Neuron.Layer))
+                {
+                    Global.FlowchartClassDefinitions += $"class Layer_{layer.Key.LayerIndex} Layer\n";
+
+                    foreach (var neuron in layer.GroupBy(l => l.Value.Neuron))
+                    {
+                        Global.FlowchartClassDefinitions += $"class Neuron_{neuron.Key.Id} Neuron\n";
+
+                    }
                 }
 
                 return fc;
