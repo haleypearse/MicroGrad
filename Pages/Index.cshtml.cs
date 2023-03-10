@@ -49,8 +49,11 @@ namespace MicroGrad.Pages
 
         public void NNFun()
         {
+            var topoTest = Value.NodesAndLinks(new MLP(NNParams).Layers.Last().Neurons.Last().Output);
+            //var diagramText = Value.GetDiagram(new MLP(NNParams).Layers.Last().Neurons.Last().Output);
 
             DiagramContent = new MLP(NNParams).Diagram;
+            //DiagramContent = diagramText;
 
         }
     }
