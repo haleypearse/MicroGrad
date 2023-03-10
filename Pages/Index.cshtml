@@ -17,8 +17,9 @@
 </form>
 
 <pre class="mermaid">@Model.DiagramContent</pre>
-<div style="white-space: pre-line">@Model.DiagramContent</div>
+<div>@Html.Raw(Model.DiagramContent.Replace("\n", "<br>\n").Replace("\t", "&nbsp;&nbsp;&nbsp;&nbsp;"))</div>
 
+@*Replace("\n", "<br>").Replace("\t", "&nbsp;&nbsp;")*@
 
 <script src="https://unpkg.com/mermaid@8.14.0/dist/mermaid.min.js"></script>
 
