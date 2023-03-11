@@ -40,12 +40,6 @@ namespace MicroGrad
             ).Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
             .ToDictionary(c => c.Split(':')[0], c => c.Split(':')[1]);
         public static List<string> FlowchartClassAssignments { get; set; } = new List<string>();
-            //=
-            //("classDef Node fill:#FFFACD;" +
-            //"classDef Neuron fill:#8B4513;" +
-            //"classDef Add fill:#DC143C;" +
-            //"classDef Multiply fill:#6495ED;"
-            //).Split(new char[] {';' },StringSplitOptions.RemoveEmptyEntries).ToList();
         public static string FlowchartDefinition = "flowchart LR\n" +
             "%%{ init: { 'theme': 'dark', 'themeVariables': {'textColor': '#fff', 'borderColor': '#7C0000', 'lineColor': '#F8B229'}}}%%\n";
 
@@ -54,11 +48,6 @@ namespace MicroGrad
             ValueId = NeuronId = 1;
         }
     }
-
-    //public class Context
-    //{
-    //    public Layer Layer { get; set; }
-    //}
 
     public class Record
     {
@@ -136,8 +125,6 @@ namespace MicroGrad
                 X = Enumerable.Range(1, nin).Select(i => new Value(null, "Input"));
                 //var inputNeuron = 
             }
-
-
 
             for (int i = 0; i < nout; i++)
             {
@@ -251,7 +238,6 @@ namespace MicroGrad
         public double Grad { get; set; }
         public string Comment { get; set; }
         public string Context { get; set; }
-        //public string NodeDisplay
         public List<Value> Parents { get; set; } = new List<Value>();
         public Value Child { get; set; } //{ get => Global.Values.First(v => v.Parents.Contains(this)); }
         //public List<Value> Prev { get => Parents.Distinct().ToList(); }
@@ -292,46 +278,6 @@ namespace MicroGrad
             return Op == null
                 ? $"{IdDisplay}[{Comment}: {DataDisplay}]"
                 : $"{IdDisplay}[{Op.Display}: {DataDisplay}]";
-        }
-        public class Link
-        {
-            public Link(Value from, Value to)
-            {
-                From = from;
-                To = to;
-            }
-
-            public string Text { get => $"{From.Id} --> {To.Id}"; }
-            public Value From { get; set; }
-            public Value To { get; set; }
-
-        }
-        public class Node
-        {
-            public Node(string nodeType, Value value = null, Value to = null)
-            {
-                NodeType = nodeType;
-                Value = value;
-            }
-
-            public string DiagramText
-            {
-                get =>
-                        NodeType == "neuron" ? $"{NodeType}{Value.Id}[{Value.Comment}: {Value.DataDisplay}]" :
-                        NodeType == "op" ? $"{OpText} %% {Depth}"
-                    : null ;
-                    //LineType == "link" ?
-                    //$"{NodeType}{Value.Id}[{Value.Comment}: {Value.DataDisplay}]".PadRight(40, ' ') + "%% {depth}\n" :
-                    //LineType == "link" ? $"{Value.Id} --> {To.Id}".PadRight(40, ' ') + "%% {depth}\n" :
-                    //null;
-            }
-            public int Depth { get; set; }
-            public Value Value { get; set; }
-            
-            //public string LineType { get; set; } // node, link
-            public string NodeType { get; set; } // op, neuron
-            public string OpText { get => "Op_" + Value.Parents.Select(p => p.Id.ToString()).Join("-") + "_" + Value.Id.ToString(); }
-
         }
 
         /// <summary>
@@ -402,7 +348,7 @@ namespace MicroGrad
                 var layer = layerGroup.Key?.IdDisplay;
                 if (layer != null)
                 {
-                    AppendLine($"subgraph {layer}");
+                    AddLine($"subgraph {layer}");
                     Global.FlowchartClassAssignments.Add($"class {layer} Layer");
                     indent ++;
                 }
@@ -414,22 +360,22 @@ namespace MicroGrad
                     var neuron = neuronGroup.Key?.IdDisplay;
                     if (neuron != null)
                     {
-                        AppendLine($"subgraph {neuron}");
+                        AddLine($"subgraph {neuron}");
                         Global.FlowchartClassAssignments.Add($"class {neuron} Neuron");
                         indent ++;
                     }
 
                     foreach (var value in neuronGroup)
                     {
-                        AppendLine(value.DiagramText());
-                        AddOpLinks(neuron: neuronGroup.Key);
+                        AddLine(value.DiagramText());
+                        AddOpsOrLinks(neuron: neuronGroup.Key);
                     }
 
                     // close neuron subgraph
                     if (neuron != null)
                     {
                         indent--;
-                        AppendLine("end");
+                        AddLine("end");
                     }
                 }
 
@@ -437,18 +383,16 @@ namespace MicroGrad
                 if (layer != null)
                 {
                     indent--;
-                    AppendLine("end");
+                    AddLine("end");
                 }
             }
 
-            AddOpLinks(); // Add remaining
+            AddOpsOrLinks(); // Add remaining
 
             return lines.Join("\n");
 
             // When neuron parameter is set, the op will be added to the neuron, but adding links is postponed
-            //void AddOps(Neuron neuron = null)
-            //void AddLinks(Neuron neuron = null)
-            void AddOpLinks(Neuron neuron = null)
+            void AddOpsOrLinks(Neuron neuron = null)
             {
                 // Add links
                 foreach (var linksByChild in valuesToLink.Where(l => neuron == null || l.Item2.Neuron == neuron).GroupBy(l => l.Item2))
@@ -459,19 +403,19 @@ namespace MicroGrad
                         var opName = Op(linksByChild.Key);
                         var line = $"{opName}(({((char)linksByChild.Key.Op.Char)}))";
                         if (!lines.Any(l=>l.Contains(line)))
-                            AppendLine(line);
+                            AddLine(line);
 
                         // Link parents to op
                         if (neuron == null)
                             foreach (var link in linksByChild.ToList())
                             {
-                                Link(link.Item1.IdDisplay, opName);
+                                AddLink(link.Item1.IdDisplay, opName);
                                 valuesToLink.Remove(link);
                             }
 
                         // Link op to child
                         if (neuron == null)
-                            Link(opName, linksByChild.Key.IdDisplay);
+                            AddLink(opName, linksByChild.Key.IdDisplay);
                     }
                     else
                     {
@@ -479,14 +423,14 @@ namespace MicroGrad
                         if (neuron == null)
                             foreach (var link in linksByChild.ToList())
                             {
-                                Link(link.Item1.IdDisplay, link.Item2.IdDisplay);
+                                AddLink(link.Item1.IdDisplay, link.Item2.IdDisplay);
                                 valuesToLink.Remove(link);
                             }
                     }
                 }
             }
-            void AppendLine(string s) => lines.Add(new string('\t', indent) + s); // fc.Append(new string('\t', indent) + s + "\n");
-            void Link(string from, string to) => lines.Add(new string('\t', indent) + from + " --> " + to);
+            void AddLine(string s) => lines.Add(new string('\t', indent) + s); 
+            void AddLink(string from, string to) => lines.Add(new string('\t', indent) + from + " --> " + to);
             string Op(Value v) => v.Parents.Select(p=>p.Id.ToString()).Join("-") + "_" + v.Id.ToString();
 
         }
