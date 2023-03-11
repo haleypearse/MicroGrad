@@ -20,6 +20,14 @@ namespace MicroGrad
     public static class Global
     {
         public static int ValueId { get; set; }
+        public static int Id(string type)
+        {
+            if (!Ids.ContainsKey(type))
+                Ids.Add(type, 0);
+            return ++Ids[type];
+
+        }
+        public static Dictionary<string,int> Ids { get; set; } = new Dictionary<string, int>();
         public static int NeuronId { get; set; }
         public static string Context { get; set; }
         public static Random Rand { get; set; } = new Random(1234);
@@ -38,7 +46,8 @@ namespace MicroGrad
             //"classDef Add fill:#DC143C;" +
             //"classDef Multiply fill:#6495ED;"
             //).Split(new char[] {';' },StringSplitOptions.RemoveEmptyEntries).ToList();
-        public static string FlowchartDefinition = "flowchart LR\n\n";
+        public static string FlowchartDefinition = "flowchart LR\n" +
+            "%%{ init: { 'theme': 'dark', 'themeVariables': {'textColor': '#fff', 'borderColor': '#7C0000', 'lineColor': '#F8B229'}}}%%\n";
 
         public static void Initialize()
         {
@@ -53,8 +62,14 @@ namespace MicroGrad
 
     public class Record
     {
+        public Record()
+        {
+            Id = Global.Id(GetType().Name);
+        }
+
         public string IdDisplay { get => GetType().Name + "_" + Id.ToString(); } //.PadLeft(3, '0')
-        public int Id { get; set; } = Global.ValueId++;
+        public int Id { get; } // = Global.Id++;
+        //public int Id { get; set; } = Global.ValueId++;
     }
     public class Module : Record
     {
@@ -67,7 +82,7 @@ namespace MicroGrad
     {
         public Neuron(IEnumerable<Value> X, string nonlin = null)
         {
-            Id = Global.NeuronId++;
+            //Id = Global.NeuronId++;
             Initialize(X);
             switch (nonlin)
             {
@@ -80,7 +95,8 @@ namespace MicroGrad
         {
             W = Enumerable.Range(1, X.Count()).Select(i => new Value(null, "W", this)).ToArray();
             B = new Value(null, "B", this);
-            Output = X.Zip(W).Select(tup => tup.First * tup.Second).Aggregate((x, y) => x + y);
+            var products = X.Zip(W).Select(xw => xw.First * xw.Second);
+            Output = products.Aggregate((x, y) => x + y);
         }
 
         public double Forward(double[] X)   
@@ -114,8 +130,14 @@ namespace MicroGrad
         public Layer(int nin, int nout, Layer lastLayer)
         {
             // Set the layer's inputs to outputs of prev layer or create new values
-            var X = lastLayer?.Neurons.Select(n => n.Output)
-                ?? Enumerable.Range(1, nin).Select(i => new Value(null, "Input"));
+            var X = lastLayer?.Neurons.Select(n => n.Output);
+            if (X == null)
+            {
+                X = Enumerable.Range(1, nin).Select(i => new Value(null, "Input"));
+                //var inputNeuron = 
+            }
+
+
 
             for (int i = 0; i < nout; i++)
             {
@@ -137,6 +159,8 @@ namespace MicroGrad
         {
             for (int i = 0; i < layerSizes.Length - 1; i++)
                 Layers.Add(new Layer(layerSizes[i], layerSizes[i + 1], Layers.LastOrDefault()) { Parent = this, }) ;
+            Root.Parents.AddRange(Layers.Last().Neurons.Select(n=>n.Output));
+            //Layers.Last().Neurons.ForEach(n=>n.Output.Child = Root);
         }
         public double Forward(double[] X)
         {
@@ -147,14 +171,16 @@ namespace MicroGrad
         }
         public IEnumerable<Value> Parameters { get => Layers.SelectMany(n=>n.Parameters); }
         public List<Layer> Layers { get; set; } = new List<Layer>();
+        /// <summary>
+        /// Output values are gathered under this root node for convenience
+        /// </summary>
+        public Value Root { get; set; } = new Value(null, "Root");
         public string Diagram { get
             {
-                return Global.FlowchartDefinition + string.Join("\n", Layers.Last().Neurons.Select(n => Value.GetDiagram(n.Output))) + "\n\n"
+                return Global.FlowchartDefinition + Value.GetDiagram(Root) + "\n\n"
                     + string.Join("", Global.FlowchartClassDefinitions.Where(def=>Global.FlowchartClassAssignments.Any(s=> def.Key == s.Split(' ')[1].Split('_').First())).Select(def=>$"classDef {def.Key} fill:{def.Value}\n"))
                     + Global.FlowchartClassAssignments.Distinct().Join("\n"); 
             } }
-        public string OldDiagram { get => Global.FlowchartDefinition + string.Join("\n", Layers.Last().Neurons.Select(n => n.Output.Diagram)) + "\n\n" + Global.FlowchartClassAssignments; }
-
     }
 
     public class Op
@@ -162,7 +188,7 @@ namespace MicroGrad
         public Op(OpChar opChar) => this.Char = opChar;
         public Op(char opChar) => this.Char = (OpChar)(opChar);
         public OpChar Char { get; set; }
-        public string Display { get => Char.ToString(); }
+        public string Display { get => ((char)Char).ToString(); }
         public string Color
         {
             get
@@ -263,7 +289,9 @@ namespace MicroGrad
         }
         public string DiagramText()
         {
-            return $"{IdDisplay}[{Comment}: {DataDisplay}]";
+            return Op == null
+                ? $"{IdDisplay}[{Comment}: {DataDisplay}]"
+                : $"{IdDisplay}[{Op.Display}: {DataDisplay}]";
         }
         public class Link
         {
@@ -284,7 +312,6 @@ namespace MicroGrad
             {
                 NodeType = nodeType;
                 Value = value;
-
             }
 
             public string DiagramText
@@ -332,7 +359,7 @@ namespace MicroGrad
             }
         }
 
-        public static (List<Value>, List<(Value, Value)>) NodesAndLinks(Value root)
+        public static (List<Value>, List<(Value, Value)>) NodesAndLinks(Value root, bool ExcludeRoot = false)
         {
             var nodes = new List<Value>();
             var links = new List<(Value, Value)>();
@@ -341,29 +368,37 @@ namespace MicroGrad
             {
                 if (!nodes.Contains(v))
                 {
-                    nodes.Add(v);
+                    if (v != root || !ExcludeRoot)
+                        nodes.Add(v);
                     foreach (var parent in v.Parents)
                     {
-                        links.Add((parent, v));
+                        if (v != root || !ExcludeRoot)
+                            links.Add((parent, v));
                         Build(parent);
                     }
                 }
-                else;
             }
+            //if (ExcludeRoot)
+            //{
+            //    nodes.Remove(root);
+            //    links = links.Where(l => l.Item1 == root || l.Item2 == root).ToList();
+            //}
             return (nodes, links);
         }
         
         public static string GetDiagram(Value root)
         {
-            var nodesAndLinks = Value.NodesAndLinks(root);
+            var nodesAndLinks = Value.NodesAndLinks(root, true);
             var nodes = nodesAndLinks.Item1;
-            var linksToAdd = nodesAndLinks.Item2.ToList();
+            var valuesToLink = nodesAndLinks.Item2.ToList();
             var indent = 0;
-
-            var links = new StringBuilder();
+            //var links = new StringBuilder();
+            var lines = new List<string>();
             var fc = new StringBuilder();
 
-            foreach (var layerGroup in nodesAndLinks.Item1.GroupBy(l => l.Neuron?.Layer))            {
+            foreach (var layerGroup in nodesAndLinks.Item1.GroupBy(l => l.Neuron?.Layer).OrderBy(g=>g.Key == null))
+            {
+                // Open layer subgraph
                 var layer = layerGroup.Key?.IdDisplay;
                 if (layer != null)
                 {
@@ -372,8 +407,10 @@ namespace MicroGrad
                     indent ++;
                 }
 
-                foreach (var neuronGroup in layerGroup.GroupBy(l => l.Neuron))
+
+                foreach (var neuronGroup in layerGroup.GroupBy(l => l.Neuron).OrderBy(g => g.Key == null))
                 {
+                    // Open neuron subgraph
                     var neuron = neuronGroup.Key?.IdDisplay;
                     if (neuron != null)
                     {
@@ -381,23 +418,18 @@ namespace MicroGrad
                         Global.FlowchartClassAssignments.Add($"class {neuron} Neuron");
                         indent ++;
                     }
-                    else;
 
                     foreach (var value in neuronGroup)
                     {
                         AppendLine(value.DiagramText());
-                        foreach (var link in linksToAdd.Where(l => l.Item1 == value).ToList())
-                        {
-                            Link(link.Item1, link.Item2);
-                            linksToAdd.Remove(link);
-                        }
+                        AddOpLinks(neuron: neuronGroup.Key);
                     }
 
                     // close neuron subgraph
                     if (neuron != null)
                     {
                         indent--;
-                        AppendLine($"end");
+                        AppendLine("end");
                     }
                 }
 
@@ -405,109 +437,58 @@ namespace MicroGrad
                 if (layer != null)
                 {
                     indent--;
-                    AppendLine($"end");
+                    AppendLine("end");
                 }
             }
 
-            // add remaining links
-            foreach (var link in linksToAdd)
+            AddOpLinks(); // Add remaining
+
+            return lines.Join("\n");
+
+            // When neuron parameter is set, the op will be added to the neuron, but adding links is postponed
+            //void AddOps(Neuron neuron = null)
+            //void AddLinks(Neuron neuron = null)
+            void AddOpLinks(Neuron neuron = null)
             {
-                Link(link.Item1, link.Item2);
-                //linksToAdd.Remove(link);
-            }
-
-            return links.ToString() + fc.ToString();
-
-            void AppendLine(string s) => fc.Append(new string('\t', indent) + s + "\n");
-            void Link(Value v1, Value v2) => fc.Append(v1.IdDisplay + " --> " + v2.IdDisplay + "\n");
-        }
-
-
-        public string Diagram
-        {
-            get
-            {
-                var nodes = new List<Node>();
-                //var links = new List<Link>();
-                var links = new StringBuilder();
-                //var depth = 0;
-
-                Build(this);
-                void Build(Value v)
+                // Add links
+                foreach (var linksByChild in valuesToLink.Where(l => neuron == null || l.Item2.Neuron == neuron).GroupBy(l => l.Item2))
                 {
-                    //depth++;
-                    foreach (var parent in v.Parents)
+                    // If child is the result of an operation
+                    if (linksByChild.Key.Op != null)
                     {
-                        Build(parent);
-                        links.Append($"Node_{parent.Id} --> Node_{v.Id}\n"); // ($"Node_{parent.Id}", Op(v));
+                        var opName = Op(linksByChild.Key);
+                        var line = $"{opName}(({((char)linksByChild.Key.Op.Char)}))";
+                        if (!lines.Any(l=>l.Contains(line)))
+                            AppendLine(line);
+
+                        // Link parents to op
+                        if (neuron == null)
+                            foreach (var link in linksByChild.ToList())
+                            {
+                                Link(link.Item1.IdDisplay, opName);
+                                valuesToLink.Remove(link);
+                            }
+
+                        // Link op to child
+                        if (neuron == null)
+                            Link(opName, linksByChild.Key.IdDisplay);
                     }
-                    nodes.Add(new Node("node", v));
-
-                    if (nodes.Any(dl=>dl.Value == v))
-                        return;
-
-                    string neuronId = v.Neuron?.Id.ToString();
-                    //string layer = v.Neuron.Layer.
-                    if (null != neuronId)
+                    else
                     {
-                        //fc += $"\nsubgraph Neuron_{neuronId} %% {depth}\n";
-                        //Global.FlowchartClassDefinitions += $"class Neuron_{neuronId} Neuron\n";
+                        // Link directly
+                        if (neuron == null)
+                            foreach (var link in linksByChild.ToList())
+                            {
+                                Link(link.Item1.IdDisplay, link.Item2.IdDisplay);
+                                valuesToLink.Remove(link);
+                            }
                     }
-
-                    // Add the node to graph
-                        //fc += $"Node_{v.Id}[{v.Comment}: {v.DataDisplay}] %% {depth}\n";
-                        //Global.FlowchartClassDefinitions += $"class Node_{v.Id} Node\n";
-
-                    if (v.Parents.Any())
-                    {
-                        nodes.Add(new Node("op", v));
-                        links.Append($"{Op(v)} --> Node_{v.Id}\n");
-                    }
-
                 }
-
-                string Op(Value v) => "Op_" + v.Parents.Select(p => p.Id.ToString()).Join("-") + "_" + v.Id.ToString();
-                //void Add(Value v, string type)
-                //{
-                //    //lines.Add(new OrderedLine(type, ) { Depth = depth, Value = v });
-                //}
-                //void Link(string from, string to)
-                //{
-                //    fc += $"{from} --> {to}".PadRight(40, ' ') + "%% {depth}\n";
-                //}
-                var fc = new StringBuilder();
-
-                foreach (var layerGroup in nodes.GroupBy(l => l.Value.Neuron?.Layer))
-                {
-                    var layer = layerGroup.Key?.LayerIndex;
-                    if (layer != null)
-                    {
-                        fc.Append($"\nsubgraph Layer_{layer}\n");
-                        //Global.FlowchartClassDefinitions += $"class Layer_{layer} Layer\n";
-                    }
-
-                    foreach (var neuronGroup in layerGroup.GroupBy(l => l.Value.Neuron))
-                    {
-                        var neuron = neuronGroup.Key?.Id;
-                        if (neuron != null)
-                        {
-                            fc.Append($"\nsubgraph Neuron_{neuron}\n");
-                            Global.FlowchartClassAssignments.Append($"class Neuron_{neuron} Neuron");
-                            //Global.FlowchartClassDefinitions += $"class Neuron_{neuron} Neuron\n";
-                        }
-                            
-                        foreach (var value in neuronGroup)
-                            fc.Append(value.DiagramText);
-
-                        if (neuron != null)
-                            fc.Append($"\nend\n");
-                    }
-                    if (layer != null)
-                        fc.Append($"\nend\n");
-                }
-
-                return links.ToString() + fc.ToString();
             }
+            void AppendLine(string s) => lines.Add(new string('\t', indent) + s); // fc.Append(new string('\t', indent) + s + "\n");
+            void Link(string from, string to) => lines.Add(new string('\t', indent) + from + " --> " + to);
+            string Op(Value v) => v.Parents.Select(p=>p.Id.ToString()).Join("-") + "_" + v.Id.ToString();
+
         }
     }
 }

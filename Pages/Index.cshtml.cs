@@ -13,7 +13,7 @@ namespace MicroGrad.Pages
         private readonly ILogger<IndexModel> _logger;
         public string DiagramContent { get; set; }
         public string Diagram { get; set; }
-        public int[] NNParams { get; private set; } = new[] { 1,1 };
+        public int[] NNParams { get; private set; } = new[] { 1,2 };
         public string InvalidParams { get; set; }
 
         public IndexModel(ILogger<IndexModel> logger)
@@ -49,10 +49,11 @@ namespace MicroGrad.Pages
 
         public void NNFun()
         {
-            var topoTest = Value.NodesAndLinks(new MLP(NNParams).Layers.Last().Neurons.Last().Output);
+            //var topoTest = Value.NodesAndLinks(new MLP(NNParams).Layers.Last().Neurons.Last().Output);
             //var diagramText = Value.GetDiagram(new MLP(NNParams).Layers.Last().Neurons.Last().Output);
 
-            DiagramContent = new MLP(NNParams).Diagram;
+            var mlp = new MLP(NNParams);
+            DiagramContent = mlp.Diagram;
             //DiagramContent = diagramText;
 
         }
