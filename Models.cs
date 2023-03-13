@@ -19,33 +19,38 @@ namespace MicroGrad
 {
     public static class Global
     {
-        public static int ValueId { get; set; }
-        public static int Id(string type)
+        //public static int ValueId { get; set; }
+        public static int Id(string type, object obj)
         {
             if (!Ids.ContainsKey(type))
-                Ids.Add(type, 0);
-            return ++Ids[type];
+                Ids.Add(type, new List<object>());
+            Ids[type].Add(obj);
+            return Ids[type].IndexOf(obj);
 
         }
-        public static Dictionary<string,int> Ids { get; set; } = new Dictionary<string, int>();
-        public static int NeuronId { get; set; }
+        //public static Dictionary<string, Dictionary<int, object>> Ids { get; set; } = new Dictionary<string, Dictionary<int, object>>();
+        public static Dictionary<string, List<object>> Ids { get; set; }
+        //public static int NeuronId { get; set; }
         public static string Context { get; set; }
         public static Random Rand { get; set; } = new Random(1234);
-        public static List<Value> Values { get; internal set; } = new List<Value>();
+        //public static List<Value> Values { get; internal set; } = new List<Value>();
         public static Dictionary<string,string> FlowchartClassDefinitions { get; set; } =
-            ("Node:#FFFACD;" +
-            "Neuron:#8B4513;" +
-            "Add:#DC143C;" +
-            "Multiply:#6495ED;"
-            ).Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-            .ToDictionary(c => c.Split(':')[0], c => c.Split(':')[1]);
+            ("Node~fill:#FFFACD/" +
+            "Neuron~fill:#8B4513/" +
+            "Layer~fill:#331122/" + //, height:100%
+            "Add~fill:#DC143C/" +
+            "Multiply~fill:#6495ED/"
+            ).Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries)
+            .ToDictionary(c => c.Split('~')[0], c => c.Split('~')[1]);
         public static List<string> FlowchartClassAssignments { get; set; } = new List<string>();
         public static string FlowchartDefinition = "flowchart LR\n" +
             "%%{ init: { 'theme': 'dark', 'themeVariables': {'textColor': '#fff', 'borderColor': '#7C0000', 'lineColor': '#F8B229'}}}%%\n";
 
         public static void Initialize()
         {
-            ValueId = NeuronId = 1;
+            Ids = new Dictionary<string, List<object>>();
+            //Values = new List<Value>();
+            //ValueId = NeuronId = 1;
         }
     }
 
@@ -53,7 +58,7 @@ namespace MicroGrad
     {
         public Record()
         {
-            Id = Global.Id(GetType().Name);
+            Id = Global.Id(GetType().Name, this);
         }
 
         public string IdDisplay { get => GetType().Name + "_" + Id.ToString(); } //.PadLeft(3, '0')
@@ -82,7 +87,7 @@ namespace MicroGrad
 
         public void Initialize(IEnumerable<Value> X)
         {
-            W = Enumerable.Range(1, X.Count()).Select(i => new Value(null, "W", this)).ToArray();
+            W = Enumerable.Range(1, X.Count()).Select(i => new Value(null, "W" + i, this)).ToArray();
             B = new Value(null, "B", this);
             var products = X.Zip(W).Select(xw => xw.First * xw.Second);
             Output = products.Aggregate((x, y) => x + y);
@@ -122,7 +127,7 @@ namespace MicroGrad
             var X = lastLayer?.Neurons.Select(n => n.Output);
             if (X == null)
             {
-                X = Enumerable.Range(1, nin).Select(i => new Value(null, "Input"));
+                X = Enumerable.Range(1, nin).Select(i => new Value(null, "I")).ToList();
                 //var inputNeuron = 
             }
 
@@ -165,7 +170,10 @@ namespace MicroGrad
         public string Diagram { get
             {
                 return Global.FlowchartDefinition + Value.GetDiagram(Root) + "\n\n"
-                    + string.Join("", Global.FlowchartClassDefinitions.Where(def=>Global.FlowchartClassAssignments.Any(s=> def.Key == s.Split(' ')[1].Split('_').First())).Select(def=>$"classDef {def.Key} fill:{def.Value}\n"))
+                    + string.Join("",
+                    Global.FlowchartClassDefinitions
+                    //.Where(def=>Global.FlowchartClassAssignments.Any(s=> def.Key == s.Split(' ')[1].Split('_').First()))
+                    .Select(def=>$"classDef {def.Key} {def.Value}\n"))
                     + Global.FlowchartClassAssignments.Distinct().Join("\n"); 
             } }
     }
@@ -199,7 +207,7 @@ namespace MicroGrad
         Power = '^',
     }
 
-    [DebuggerDisplay("{Id, nq}: {Data, nq}")]
+    [DebuggerDisplay("{DebuggerDisplay()}")]
     public class Value : Record
     {
         public Value(double? data = null, string comment = null, Neuron neuron = null)
@@ -211,11 +219,16 @@ namespace MicroGrad
             Data = data ?? Global.Rand.NextDouble() * 2 - 1;
             Neuron = neuron;
 
-            Global.Values.Add(this); // TODO: remove
+            //Global.Values.Add(this); // TODO: remove
         }
 
         public Neuron Neuron { get; set; }
         public double Data { get; set; }
+        public string DebuggerDisplay()
+        {
+            return $"{Parents.Select(p=>p.Comment+p.Id).Join("-")}_{Comment+Id}, {DataDisplay}";
+
+        }
         public string DataDisplay { get => Data.ToString().Substring(0, 6); }
         //public string IdDisplay { get => "Node_" + Id.ToString().PadLeft(3, '0'); }
 
@@ -253,6 +266,7 @@ namespace MicroGrad
             a.Child = ret;
             b.Child = ret;
             ret.Neuron = b.Neuron;
+
             return ret;
         }
 
