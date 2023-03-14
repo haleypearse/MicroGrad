@@ -19,14 +19,14 @@
 <div class="container">
     <div class="row">
         <div class="col-md">
-            <pre class="mermaid">@Model.DiagramContent</pre>
         </div>
         <div class="col-md">
-            <div>@Html.Raw(Model.DiagramContent.Replace("\n", "<br>\n").Replace("\t", "&nbsp;&nbsp;&nbsp;&nbsp;"))</div>
         </div>
     </div>
 </div>
 
+<pre class="mermaid">@Model.DiagramContent</pre>
+<div>@Html.Raw(Model.DiagramContent.Replace("\n", "<br>\n").Replace("\t", "&nbsp;&nbsp;&nbsp;&nbsp;"))</div>
 
 
 <script src="https://unpkg.com/mermaid@8.14.0/dist/mermaid.min.js"></script>

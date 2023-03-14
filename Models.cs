@@ -15,25 +15,30 @@ using FluentMermaid.Flowchart.Enum;
 using static System.Net.Mime.MediaTypeNames;
 using static MicroGrad.Value;
 
+[assembly: DebuggerDisplay("{Key,nq}: {Value,nq}", Target = typeof(KeyValuePair<int, MicroGrad.Value>))]
+
 namespace MicroGrad
 {
+
     public static class Global
     {
         //public static int ValueId { get; set; }
-        public static int Id(string type, object obj)
+        public static int GetId(string type, object obj)
         {
             if (!Ids.ContainsKey(type))
-                Ids.Add(type, new List<object>());
-            Ids[type].Add(obj);
-            return Ids[type].IndexOf(obj);
+                Ids.Add(type, new Dictionary<int, object>());
+            var newId = Ids[type].Keys.LastOrDefault() + 1;
+            Ids[type].Add(newId, obj);
+            return newId;
 
         }
         //public static Dictionary<string, Dictionary<int, object>> Ids { get; set; } = new Dictionary<string, Dictionary<int, object>>();
-        public static Dictionary<string, List<object>> Ids { get; set; }
+        public static Dictionary<string, Dictionary<int, object>> Ids { get; set; }
+        public static Dictionary<char, Op> Ops { get; set; } = "x+-/^".ToDictionary(c=>c, c=>new Op(c));
         //public static int NeuronId { get; set; }
-        public static string Context { get; set; }
-        public static Random Rand { get; set; } = new Random(1234);
-        //public static List<Value> Values { get; internal set; } = new List<Value>();
+        //public static string Context { get; set; }
+        public static Random Rand { get; set; }
+        //public static List<Value> Values { get; internal set; }
         public static Dictionary<string,string> FlowchartClassDefinitions { get; set; } =
             ("Node~fill:#FFFACD/" +
             "Neuron~fill:#8B4513/" +
@@ -48,7 +53,8 @@ namespace MicroGrad
 
         public static void Initialize()
         {
-            Ids = new Dictionary<string, List<object>>();
+            Rand = new Random(1234);
+            Ids = new Dictionary<string, Dictionary<int, object>>();
             //Values = new List<Value>();
             //ValueId = NeuronId = 1;
         }
@@ -58,10 +64,10 @@ namespace MicroGrad
     {
         public Record()
         {
-            Id = Global.Id(GetType().Name, this);
+            Id = Global.GetId(GetType().Name, this);
         }
 
-        public string IdDisplay { get => GetType().Name + "_" + Id.ToString(); } //.PadLeft(3, '0')
+        public string TypeSpecificId { get => GetType().Name + "_" + Id.ToString(); } //.PadLeft(3, '0')
         public int Id { get; } // = Global.Id++;
         //public int Id { get; set; } = Global.ValueId++;
     }
@@ -88,9 +94,9 @@ namespace MicroGrad
         public void Initialize(IEnumerable<Value> X)
         {
             W = Enumerable.Range(1, X.Count()).Select(i => new Value(null, "W" + i, this)).ToArray();
-            B = new Value(null, "B", this);
+            b = new Value(null, "B", this);
             var products = X.Zip(W).Select(xw => xw.First * xw.Second);
-            Output = products.Aggregate((x, y) => x + y);
+            Output = products.Aggregate((x, y) => x + y) + b;
         }
 
         public double Forward(double[] X)   
@@ -103,11 +109,11 @@ namespace MicroGrad
             return Nonlin(sum.Value()).Data;
         }
 
-        public IEnumerable<Value> Parameters { get => W.Append(B); }
+        public IEnumerable<Value> Parameters { get => W.Append(b); }
         public List<Value> Values { get; set; } = new List<Value>();
         public Value[] W { get; set; }
         public Value[] X { get; set; }
-        public Value B { get; set; }
+        public Value b { get; set; }
         public Value Output { get; set; }
         public Layer Layer { get; set; }
         public delegate Value Nonlinearity(Value input);
@@ -178,10 +184,12 @@ namespace MicroGrad
             } }
     }
 
+    [DebuggerDisplay("{Display, nq}")]
     public class Op
     {
         public Op(OpChar opChar) => this.Char = opChar;
         public Op(char opChar) => this.Char = (OpChar)(opChar);
+
         public OpChar Char { get; set; }
         public string Display { get => ((char)Char).ToString(); }
         public string Color
@@ -210,26 +218,29 @@ namespace MicroGrad
     [DebuggerDisplay("{DebuggerDisplay()}")]
     public class Value : Record
     {
-        public Value(double? data = null, string comment = null, Neuron neuron = null)
+        public Value(double? data = null, string comment = null, Neuron neuron = null, List<Value> parents = null, Op op = null)
         {
-            if (comment == null)
-                ;
             Comment = comment;
-            Context = Global.Context?.ToString();
             Data = data ?? Global.Rand.NextDouble() * 2 - 1;
             Neuron = neuron;
+            Parents = parents ?? new List<Value>();
+            Op = op;
 
-            //Global.Values.Add(this); // TODO: remove
+            foreach (var combinable in Parents.Where(p => p.Op == op).ToList())
+            {
+                Parents.InsertRange(Parents.IndexOf(combinable),combinable.Parents);
+                Parents.Remove(combinable);
+            }
         }
 
         public Neuron Neuron { get; set; }
         public double Data { get; set; }
         public string DebuggerDisplay()
         {
-            return $"{Parents.Select(p=>p.Comment+p.Id).Join("-")}_{Comment+Id}, {DataDisplay}";
+            return $"{Parents.Select(p=>p.Comment+p.Neuron?.Id).Join("-")}_{Comment+Neuron?.Id}, {DataDisplay}";
 
         }
-        public string DataDisplay { get => Data.ToString().Substring(0, 6); }
+        public string DataDisplay { get => Math.Round(Data,3).ToString(); }
         //public string IdDisplay { get => "Node_" + Id.ToString().PadLeft(3, '0'); }
 
         /// <summary>
@@ -251,35 +262,24 @@ namespace MicroGrad
         public double Grad { get; set; }
         public string Comment { get; set; }
         public string Context { get; set; }
-        public List<Value> Parents { get; set; } = new List<Value>();
+        public List<Value> Parents { get; set; }
         public Value Child { get; set; } //{ get => Global.Values.First(v => v.Parents.Contains(this)); }
         //public List<Value> Prev { get => Parents.Distinct().ToList(); }
         public Op Op { get; set; } 
 
         public static Value operator +(Value a, Value b)
         {
-            var ret = new Value(a.Data + b.Data)
-            {
-                Parents = new[] { a, b }.ToList(),
-                Op = new Op('+'),
-            };
+            var ret = new Value(a.Data + b.Data, null, b.Neuron, new List<Value>() { a, b }, Global.Ops['+']);
             a.Child = ret;
             b.Child = ret;
-            ret.Neuron = b.Neuron;
-
             return ret;
         }
 
         public static Value operator *(Value a, Value b)
         {
-            var ret = new Value(a.Data * b.Data)
-            {
-                Parents = new[] { a, b }.ToList(),
-                Op = new Op('x'),
-            };
+            var ret = new Value(a.Data + b.Data, null, b.Neuron, new List<Value>() { a, b }, Global.Ops['x']);
             a.Child = ret;
             b.Child = ret;
-            ret.Neuron = b.Neuron;
             return ret;
         }
 
@@ -289,9 +289,10 @@ namespace MicroGrad
         }
         public string DiagramText()
         {
+            return $"{TypeSpecificId}[{DebuggerDisplay()}]";
             return Op == null
-                ? $"{IdDisplay}[{Comment}: {DataDisplay}]"
-                : $"{IdDisplay}[{Op.Display}: {DataDisplay}]";
+                ? $"{TypeSpecificId}[{Comment}: {DataDisplay}]"
+                : $"{TypeSpecificId}[{Op.Display}: {DataDisplay}]";
         }
 
         /// <summary>
@@ -359,7 +360,7 @@ namespace MicroGrad
             foreach (var layerGroup in nodesAndLinks.Item1.GroupBy(l => l.Neuron?.Layer).OrderBy(g=>g.Key == null))
             {
                 // Open layer subgraph
-                var layer = layerGroup.Key?.IdDisplay;
+                var layer = layerGroup.Key?.TypeSpecificId;
                 if (layer != null)
                 {
                     AddLine($"subgraph {layer}");
@@ -371,7 +372,7 @@ namespace MicroGrad
                 foreach (var neuronGroup in layerGroup.GroupBy(l => l.Neuron).OrderBy(g => g.Key == null))
                 {
                     // Open neuron subgraph
-                    var neuron = neuronGroup.Key?.IdDisplay;
+                    var neuron = neuronGroup.Key?.TypeSpecificId;
                     if (neuron != null)
                     {
                         AddLine($"subgraph {neuron}");
@@ -408,36 +409,49 @@ namespace MicroGrad
             // When neuron parameter is set, the op will be added to the neuron, but adding links is postponed
             void AddOpsOrLinks(Neuron neuron = null)
             {
-                // Add links
-                foreach (var linksByChild in valuesToLink.Where(l => neuron == null || l.Item2.Neuron == neuron).GroupBy(l => l.Item2))
+                var linksToChildren = valuesToLink.Where(l => neuron == null || l.Item2.Neuron == neuron).GroupBy(l => l.Item2);
+
+                foreach (var linksToChild in linksToChildren)
                 {
                     // If child is the result of an operation
-                    if (linksByChild.Key.Op != null)
+                    if (linksToChild.Key.Op != null)
                     {
-                        var opName = Op(linksByChild.Key);
-                        var line = $"{opName}(({((char)linksByChild.Key.Op.Char)}))";
-                        if (!lines.Any(l=>l.Contains(line)))
-                            AddLine(line);
+                        // Reuse summation and multiplication nodes instead of chaining them
+                        // If
 
-                        // Link parents to op
+
+
+                        var opName = Op(linksToChild.Key);
+                        var line = $"{opName}(({((char)linksToChild.Key.Op.Char)}))";
+
+                        if (linksToChild.Count() > 1 && linksToChild.All(l=>l.Item1.Op?.Char == l.Item2.Op?.Char))
+                        {
+
+                        }
+                        if (!lines.Any(l=>l.Trim(new char[] {' ', '\t', '\n'}).Equals(line)))
+                            AddLine(line);
+                        else;
+
                         if (neuron == null)
-                            foreach (var link in linksByChild.ToList())
+                        {
+                            // Link parents to op
+                            foreach (var link in linksToChild.ToList())
                             {
-                                AddLink(link.Item1.IdDisplay, opName);
+                                AddLink(link.Item1.TypeSpecificId, opName);
                                 valuesToLink.Remove(link);
                             }
 
-                        // Link op to child
-                        if (neuron == null)
-                            AddLink(opName, linksByChild.Key.IdDisplay);
+                            // Link op to child
+                            AddLink(opName, linksToChild.Key.TypeSpecificId);
+                        }
                     }
                     else
                     {
                         // Link directly
                         if (neuron == null)
-                            foreach (var link in linksByChild.ToList())
+                            foreach (var link in linksToChild.ToList())
                             {
-                                AddLink(link.Item1.IdDisplay, link.Item2.IdDisplay);
+                                AddLink(link.Item1.TypeSpecificId, link.Item2.TypeSpecificId);
                                 valuesToLink.Remove(link);
                             }
                     }

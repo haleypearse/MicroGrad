@@ -13,7 +13,7 @@ namespace MicroGrad.Pages
         private readonly ILogger<IndexModel> _logger;
         public string DiagramContent { get; set; }
         public string Diagram { get; set; }
-        public int[] NNParams { get; private set; } = new[] { 1,2 };
+        public int[] NNParams { get; private set; } = new[] {  2,1 };
         public string InvalidParams { get; set; }
 
         public IndexModel(ILogger<IndexModel> logger)
